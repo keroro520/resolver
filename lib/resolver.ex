@@ -52,23 +52,25 @@ defmodule Resolver do
     Enum.each(hosts, &do_resolve/1)
     :erlang.send_after(1000, self, :resolve)
 
-    {:noreply, hosts}
+    {:noreply, hosts, :hibernate}
   end
 
   # =============================================================================
   # Internal Functions
   # =============================================================================
 
-  def random do
+  defp random do
     rem(System.unique_integer([:positive]), @resolve_size)
   end
 
   defp do_resolve(host) do
     case :inet.getaddrs(to_char_list(host), :inet) do
-      {:ok, addrs} ->
-        addrs1 = Enum.map(addrs, fn({a, b, c, d}) -> "#{a}.#{b}.#{c}.#{d}" end)
-        addrs2 = Enum.map(0..@resolve_size-1, &{{&1, host}, Enum.random(addrs1)})
-        :ets.insert(@resolve_ets, addrs2)
+      {:ok, addrs0} ->
+        addrs1 = Enum.map(addrs0, fn({a, b, c, d}) -> "#{a}.#{b}.#{c}.#{d}" end)
+        addrs2 = List.duplicate(addrs1, div(@resolve_size, length(addrs1)) + 1) |> List.flatten
+        addrs3 = Enum.take(addrs2, @resolve_size)
+        addrs4 = Enum.map(0..@resolve_size-1, &{&1, host}) |> Enum.zip(addrs3)
+        :ets.insert(@resolve_ets, addrs4)
         {:ok, hd(addrs1)}
       {:error, reason} ->
         Logger.error "resolve #{host} error: #{inspect reason}"
